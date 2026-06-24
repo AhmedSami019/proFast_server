@@ -23,12 +23,21 @@ const run = async () => {
 
     // mongodb connection
     await client.connect()
-    const parcelsCollection = client.db('proFast_DB').collection('parcelsCollection')
+    const parcelsCollection = client.db('proFast_DB').collection('parcels')
 
 
     // products route
     app.get('/parcels', async(req, res)=>{
-        res.send('parcel is coming')
+        const query = {}
+
+        const {email} = req.query;
+        if(email){
+            query.senderEmail = email
+        }
+        
+        const cursor = parcelsCollection.find(query)
+        const result = await cursor.toArray()
+        res.send(result)
     })
 
     app.post('/parcels', async(req, res)=>{
