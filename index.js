@@ -5,6 +5,15 @@ const port = process.env.PORT || 3000;
 const app = express();
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
+const crypto = require("crypto");
+
+// to generate random tracking id
+function generateTrackingId() {
+  const datePart = Date.now().toString().slice(-8);
+  const random = crypto.randomBytes(4).toString("hex").toUpperCase();
+
+  return `PAR-${datePart}-${random}`;
+}
 
 // middleware
 app.use(express.json());
@@ -24,6 +33,7 @@ const run = async () => {
     // mongodb connection
     await client.connect();
     const parcelsCollection = client.db("proFast_DB").collection("parcels");
+    const paymentCollection = client.db("proFast_DB").collection("payments");
 
     // products route
     app.get("/parcels", async (req, res) => {
@@ -73,11 +83,11 @@ const run = async () => {
         line_items: [
           {
             price_data: {
-              currency: 'USD',
+              currency: "USD",
               unit_amount: amount,
               product_data: {
-                name: paymentInfo.parcelName
-              }
+                name: paymentInfo.parcelName,
+              },
             },
             quantity: 1,
           },
@@ -85,12 +95,13 @@ const run = async () => {
         mode: "payment",
         customer_email: paymentInfo.senderEmail,
         metadata: {
-          parcelId : paymentInfo.parcelId
+          parcelId: paymentInfo.parcelId,
+          parcelName: paymentInfo.parcelName,
         },
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?success=true`,
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
+        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
       });
-      res.send({url: (await session).url})
+      res.send({ url: (await session).url });
     });
 
     // old api
@@ -123,6 +134,73 @@ const run = async () => {
       console.log(session);
       res.send({ url: session.url });
     });
+
+    app.patch("/payment-success", async (req, res) => {
+      const sessionId = req.query.session_id;
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId };
+
+      const paymentExist = await paymentCollection.findOne(query);
+      if (paymentExist) {
+        return res.send({
+          massage: "payment already exist",
+          transactionId,
+          trackingId: paymentExist.trackingId,
+        });
+      }
+
+      const trackingId = generateTrackingId();
+
+      if (session.payment_status === "paid") {
+        const id = session.metadata.parcelId;
+        const query = { _id: new ObjectId(id) };
+        const update = {
+          $set: {
+            paymentStatus: "paid",
+            trackingId: trackingId,
+          },
+        };
+        const result = await parcelsCollection.updateOne(query, update);
+
+        const payment = {
+          amount: session.amount_total / 100,
+          parcelName: session.metadata.parcelName,
+          currency: session.currency,
+          customerEmail: session.customer_email,
+          parcelId: session.metadata.parcelId,
+          transactionId: session.payment_intent,
+          paymentStatus: session.payment_status,
+          paidAt: new Date(),
+          trackingId: trackingId,
+        };
+        if (session.payment_status === "paid") {
+          const paymentResult = await paymentCollection.insertOne(payment);
+          res.send({
+            success: true,
+            trackingId: trackingId,
+            transactionId: session.payment_intent,
+            modifyParcel: result,
+            paymentInfo: paymentResult,
+          });
+        }
+      }
+
+      res.send({ success: false });
+    });
+
+    // get payment data
+    app.get('/payments', async(req, res)=>{
+      const email = req.query.email
+
+      const query = {}
+      if(email){
+        query.customerEmail = email
+      }
+      const result = await paymentCollection.find(query).toArray()
+      res.send(result)
+    })
 
     const ping = await client.db("proFast_DB").command({ ping: 1 });
     if (ping.ok === 1) {
