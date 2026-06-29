@@ -7,6 +7,12 @@ require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const crypto = require("crypto");
 
+const admin = require("firebase-admin");
+const serviceAccount = require("./profast-delivery-web-app-firebase-adminsdk.json");
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
 // to generate random tracking id
 function generateTrackingId() {
   const datePart = Date.now().toString().slice(-8);
@@ -18,6 +24,34 @@ function generateTrackingId() {
 // middleware
 app.use(express.json());
 app.use(cors());
+
+// custom middleware
+const verifyFBToken = async (req, res, next) => {
+  const authorization = req.headers?.authorization;
+  console.log('authorization');
+        console.log(req.headers);
+
+  if (!authorization) {
+    return res.status(401).send({ message: "unauthorize access" });
+  }
+  const token = authorization.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "unauthorize access" });
+  }
+   try {
+    const decoded = await admin.auth().verifyIdToken(token);
+    
+    req.decoded_email = decoded.email
+    next();
+
+  } catch (error) {
+
+    return res.status(401).send({
+      message: "Invalid token",
+      error: error.message,
+    });
+  }
+};
 
 // root route
 app.get("/", (req, res) => {
@@ -131,7 +165,6 @@ const run = async () => {
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
       });
 
-      console.log(session);
       res.send({ url: session.url });
     });
 
@@ -191,16 +224,21 @@ const run = async () => {
     });
 
     // get payment data
-    app.get('/payments', async(req, res)=>{
-      const email = req.query.email
+    app.get("/payments", verifyFBToken, async (req, res) => {
+      const email = req.query.email;
 
-      const query = {}
-      if(email){
-        query.customerEmail = email
+      // console.log("from api", email, req.decoded_email);
+
+      const query = {};
+      if (email) {
+        query.customerEmail = email;
+        if(email !== req.decoded_email){
+          return res.status(403).send({message: "forbidDen access"})
+        }
       }
-      const result = await paymentCollection.find(query).toArray()
-      res.send(result)
-    })
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
 
     const ping = await client.db("proFast_DB").command({ ping: 1 });
     if (ping.ok === 1) {
