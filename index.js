@@ -28,8 +28,6 @@ app.use(cors());
 // custom middleware
 const verifyFBToken = async (req, res, next) => {
   const authorization = req.headers?.authorization;
-  console.log('authorization');
-        console.log(req.headers);
 
   if (!authorization) {
     return res.status(401).send({ message: "unauthorize access" });
@@ -236,7 +234,7 @@ const run = async () => {
           return res.status(403).send({message: "forbidDen access"})
         }
       }
-      const result = await paymentCollection.find(query).toArray();
+      const result = await paymentCollection.find(query).sort({paidAt : -1}).toArray();
       res.send(result);
     });
 
