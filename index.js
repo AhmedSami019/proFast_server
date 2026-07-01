@@ -64,8 +64,27 @@ const run = async () => {
   try {
     // mongodb connection
     await client.connect();
+    const usersCollection = client.db("proFast_DB").collection("users");
     const parcelsCollection = client.db("proFast_DB").collection("parcels");
     const paymentCollection = client.db("proFast_DB").collection("payments");
+
+
+    // users related apis
+    app.post('/users', async(req, res)=>{
+      const user = req.body;
+      user.role = "user"
+      user.createdAt = new Date()
+      const email = user.email
+
+      const isUserExits = await usersCollection.findOne({email})
+      if(isUserExits){
+        return res.send({message : 'user already exist'})
+      }
+
+      const result = await usersCollection.insertOne(user)
+      res.send(result)
+    })
+
 
     // products route
     app.get("/parcels", async (req, res) => {
