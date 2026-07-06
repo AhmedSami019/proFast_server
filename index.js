@@ -65,6 +65,7 @@ const run = async () => {
     // mongodb connection
     await client.connect();
     const usersCollection = client.db("proFast_DB").collection("users");
+    const ridersCollection = client.db("proFast_DB").collection("riders")
     const parcelsCollection = client.db("proFast_DB").collection("parcels");
     const paymentCollection = client.db("proFast_DB").collection("payments");
 
@@ -86,7 +87,17 @@ const run = async () => {
     })
 
 
-    // products route
+    // riders related apis
+    app.post('/riders', async(req, res)=>{
+      const rider = req.body
+      rider.status = "pending"
+      rider.createdAt = new Date()
+
+      const result = await ridersCollection.insertOne(rider)
+      res.send(result)
+    })
+
+    // products related apis
     app.get("/parcels", async (req, res) => {
       const query = {};
 
