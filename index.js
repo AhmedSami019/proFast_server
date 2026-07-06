@@ -108,7 +108,6 @@ const run = async () => {
 
     app.patch('/riders/:id', verifyFBToken, async(req, res)=>{
       const status = req.body.status
-      console.log(status);
       const id = req.params.id
       const query = {_id : new ObjectId(id)}
       const updatedDoc = {
@@ -117,6 +116,18 @@ const run = async () => {
         }
       }
       const result = await ridersCollection.updateOne(query, updatedDoc)
+      if(status.toLowerCase() === 'approved'){
+        const riderEmail = req.body.riderEmail
+        const userQuery = {
+          riderEmail
+        }
+        const updatedRole = {
+          $set: {
+            role : "rider"
+          }
+        }
+        const userResult = await usersCollection.updateOne(userQuery, updatedRole)
+      }
       res.send(result)
     })
 
