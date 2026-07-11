@@ -36,14 +36,12 @@ const verifyFBToken = async (req, res, next) => {
   if (!token) {
     return res.status(401).send({ message: "unauthorize access" });
   }
-   try {
+  try {
     const decoded = await admin.auth().verifyIdToken(token);
-    
-    req.decoded_email = decoded.email
+
+    req.decoded_email = decoded.email;
     next();
-
   } catch (error) {
-
     return res.status(401).send({
       message: "Invalid token",
       error: error.message,
@@ -65,71 +63,121 @@ const run = async () => {
     // mongodb connection
     await client.connect();
     const usersCollection = client.db("proFast_DB").collection("users");
-    const ridersCollection = client.db("proFast_DB").collection("riders")
+    const ridersCollection = client.db("proFast_DB").collection("riders");
     const parcelsCollection = client.db("proFast_DB").collection("parcels");
     const paymentCollection = client.db("proFast_DB").collection("payments");
 
+    // middleware to verify admin
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.decoded_email;
+        const user = await usersCollection.findOne({ email });
+
+        if (!user || user.role?.toLowerCase() !== "admin") {
+          return res.status(403).send({ message: "Forbidden access" });
+        }
+        next();
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Internal server error" });
+      }
+    };
 
     // users related apis
-    app.post('/users', async(req, res)=>{
-      const user = req.body;
-      user.role = "user"
-      user.createdAt = new Date()
-      const email = user.email
 
-      const isUserExits = await usersCollection.findOne({email})
-      if(isUserExits){
-        return res.send({message : 'user already exist'})
+    app.get("/users", verifyFBToken, async (req, res) => {
+      const result = await usersCollection.find().toArray();
+      res.send(result);
+    });
+
+    app.get("/users/:id", async (req, res) => {});
+
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const query = { email };
+      const user = await usersCollection.findOne(query);
+      res.send({ role: user?.role || "user" });
+    });
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+      const email = user.email;
+
+      const isUserExits = await usersCollection.findOne({ email });
+      if (isUserExits) {
+        return res.send({ message: "user already exist" });
       }
 
-      const result = await usersCollection.insertOne(user)
-      res.send(result)
-    })
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
 
+    app.patch(
+      "/users/:id/role",
+      verifyFBToken,
+      verifyAdmin,
+      async (req, res) => {
+        const role = req.body.role;
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: role,
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      },
+    );
 
     // riders related apis
-    app.get('/riders', async(req, res)=>{
-      const query = {}
-      if(req.query.status){
-        query.status = req.query.status
+    app.get("/riders", async (req, res) => {
+      const query = {};
+      if (req.query.status) {
+        query.status = req.query.status;
       }
-      const result = await ridersCollection.find(query).toArray()
-      res.send(result)
-    })
+      const result = await ridersCollection.find(query).toArray();
+      res.send(result);
+    });
 
-    app.post('/riders', async(req, res)=>{
-      const rider = req.body
-      rider.status = "pending"
-      rider.createdAt = new Date()
+    app.post("/riders", async (req, res) => {
+      const rider = req.body;
+      rider.status = "pending";
+      rider.createdAt = new Date();
 
-      const result = await ridersCollection.insertOne(rider)
-      res.send(result)
-    })
+      const result = await ridersCollection.insertOne(rider);
+      res.send(result);
+    });
 
-    app.patch('/riders/:id', verifyFBToken, async(req, res)=>{
-      const status = req.body.status
-      const id = req.params.id
-      const query = {_id : new ObjectId(id)}
+    app.patch("/riders/:id", verifyFBToken, async (req, res) => {
+      const status = req.body.status;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
       const updatedDoc = {
-        $set : {
-          status: status
-        }
-      }
-      const result = await ridersCollection.updateOne(query, updatedDoc)
-      if(status.toLowerCase() === 'approved'){
-        const riderEmail = req.body.riderEmail
+        $set: {
+          status: status,
+        },
+      };
+      const result = await ridersCollection.updateOne(query, updatedDoc);
+      if (status.toLowerCase() === "approved") {
+        const riderEmail = req.body.riderEmail;
         const userQuery = {
-          riderEmail
-        }
+          riderEmail,
+        };
         const updatedRole = {
           $set: {
-            role : "rider"
-          }
-        }
-        const userResult = await usersCollection.updateOne(userQuery, updatedRole)
+            role: "rider",
+          },
+        };
+        const userResult = await usersCollection.updateOne(
+          userQuery,
+          updatedRole,
+        );
       }
-      res.send(result)
-    })
+      res.send(result);
+    });
 
     // products related apis
     app.get("/parcels", async (req, res) => {
@@ -294,11 +342,14 @@ const run = async () => {
       const query = {};
       if (email) {
         query.customerEmail = email;
-        if(email !== req.decoded_email){
-          return res.status(403).send({message: "forbidDen access"})
+        if (email !== req.decoded_email) {
+          return res.status(403).send({ message: "forbidDen access" });
         }
       }
-      const result = await paymentCollection.find(query).sort({paidAt : -1}).toArray();
+      const result = await paymentCollection
+        .find(query)
+        .sort({ paidAt: -1 })
+        .toArray();
       res.send(result);
     });
 
