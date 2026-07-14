@@ -239,6 +239,21 @@ const run = async () => {
       res.send(result);
     });
 
+    app.get("/parcels/rider", async(req, res)=>{
+      const {riderEmail, deliveryStatus} = req.query
+      const query = {}
+      if(riderEmail){
+        query.riderEmail = riderEmail
+      }
+      if(deliveryStatus){
+        query.deliveryStatus = {$in : ['driver_assigned', 'rider_arrived']}
+      }
+
+      const result = await parcelsCollection.find(query).toArray()
+      res.send(result)
+      
+    })
+
     app.get("/parcels/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -254,6 +269,19 @@ const run = async () => {
       res.send(result);
     });
 
+
+    app.patch('/parcels/:id/status', async(req, res)=>{
+      const {deliveryStatus} = req.body
+      const query = {_id: new ObjectId(req.params.id)}
+      const updatedParcel = {
+        $set: {
+          deliveryStatus
+        }
+      }
+      const result = await parcelsCollection.updateOne(query, updatedParcel)
+      res.send(result)
+    })
+
     app.patch("/parcels/:id", async (req, res) => {
       const { riderId, riderName, riderEmail } = req.body;
       const id = req.params.id;
@@ -263,7 +291,7 @@ const run = async () => {
           deliveryStatus: "driver_assigned",
           riderId,
           riderName,
-          riderName,
+          riderEmail,
         },
       };
       const parcelResult = await parcelsCollection.updateOne(
