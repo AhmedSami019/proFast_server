@@ -246,7 +246,7 @@ const run = async () => {
         query.riderEmail = riderEmail
       }
       if(deliveryStatus){
-        query.deliveryStatus = {$in : ['driver_assigned', 'rider_arrived']}
+        query.deliveryStatus = {$nin : ['parcel_delivered']}
       }
 
       const result = await parcelsCollection.find(query).toArray()
@@ -278,7 +278,23 @@ const run = async () => {
           deliveryStatus
         }
       }
+
       const result = await parcelsCollection.updateOne(query, updatedParcel)
+      const parcel = await parcelsCollection.findOne(query)
+      const riderId = parcel.riderId
+    if(deliveryStatus === "parcel_delivered"){
+      const riderQuery = {
+        _id : new ObjectId(riderId)
+      }
+
+      const updatedRider = {
+        $set: {
+          workStatus: "available"
+        }
+      }
+      const riderResult = await ridersCollection.updateOne(riderQuery, updatedRider)
+    }
+
       res.send(result)
     })
 
