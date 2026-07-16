@@ -66,6 +66,7 @@ const run = async () => {
     const ridersCollection = client.db("proFast_DB").collection("riders");
     const parcelsCollection = client.db("proFast_DB").collection("parcels");
     const paymentCollection = client.db("proFast_DB").collection("payments");
+    const trackingsCollection = client.db("proFast_DB").collection("trackings");
 
     // middleware to verify admin
     const verifyAdmin = async (req, res, next) => {
@@ -82,6 +83,18 @@ const run = async () => {
         res.status(500).send({ message: "Internal server error" });
       }
     };
+
+    // to update tracking 
+    const logTracking = async(trackingId, status)=>{
+      const log = {
+        trackingId,
+        status,
+        details: status.split('_').join(" "),
+        createdAt : new Date()
+      }
+      const result = await trackingsCollection.insertOne(log)
+      return result;
+    }
 
     // users related apis
 
@@ -245,8 +258,10 @@ const run = async () => {
       if(riderEmail){
         query.riderEmail = riderEmail
       }
-      if(deliveryStatus){
+      if(deliveryStatus !== 'parcel_delivered'){
         query.deliveryStatus = {$nin : ['parcel_delivered']}
+      }else{
+        query.deliveryStatus = deliveryStatus
       }
 
       const result = await parcelsCollection.find(query).toArray()
@@ -294,12 +309,13 @@ const run = async () => {
       }
       const riderResult = await ridersCollection.updateOne(riderQuery, updatedRider)
     }
+    logTracking(parcel.trackingId, deliveryStatus)
 
       res.send(result)
     })
 
     app.patch("/parcels/:id", async (req, res) => {
-      const { riderId, riderName, riderEmail } = req.body;
+      const { riderId, riderName, riderEmail, trackingId } = req.body;
       const id = req.params.id;
       const parcelQuery = { _id: new ObjectId(id) };
       const updatedParcel = {
@@ -326,6 +342,9 @@ const run = async () => {
         riderQuery,
         updatedRider,
       );
+
+      logTracking(trackingId, 'driver_assigned')
+
       res.send({ parcelResult, riderResult });
     });
 
@@ -442,6 +461,10 @@ const run = async () => {
         };
         if (session.payment_status === "paid") {
           const paymentResult = await paymentCollection.insertOne(payment);
+
+          // make tracking
+          logTracking(trackingId, "pickup_pending")
+
           res.send({
             success: true,
             trackingId: trackingId,
