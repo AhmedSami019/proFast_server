@@ -355,6 +355,14 @@ const run = async () => {
       res.send(result);
     });
 
+    // trackings related apis
+    app.get("/parcel-trackings/:trackingId/logs", async(req, res)=>{
+      const trackingId = req.params.trackingId
+      const query = {trackingId}
+      const result = await trackingsCollection.find(query).toArray()
+      res.send(result)
+    })
+
     // payment related apis of
     // new one
     app.post("/payment-checkout-session", async (req, res) => {
