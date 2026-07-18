@@ -280,6 +280,7 @@ const run = async () => {
       const parcel = req.body;
       // parcel sending time
       parcel.createdAt = new Date();
+      parcel.trackingId = generateTrackingId()
       const result = await parcelsCollection.insertOne(req.body);
       res.send(result);
     });
@@ -376,7 +377,7 @@ const run = async () => {
               currency: "USD",
               unit_amount: amount,
               product_data: {
-                name: paymentInfo.parcelName,
+                name: `please pay for ${paymentInfo.parcelName}`,
               },
             },
             quantity: 1,
@@ -387,6 +388,7 @@ const run = async () => {
         metadata: {
           parcelId: paymentInfo.parcelId,
           parcelName: paymentInfo.parcelName,
+          trackingId: paymentInfo.trackingId
         },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
@@ -416,6 +418,7 @@ const run = async () => {
         mode: "payment",
         metadata: {
           parcelId: paymentInfo.parcelId,
+          trackingId: paymentInfo.trackingId
         },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
@@ -440,7 +443,7 @@ const run = async () => {
         });
       }
 
-      const trackingId = generateTrackingId();
+      const trackingId = session.metadata.trackingId;
 
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
@@ -473,7 +476,7 @@ const run = async () => {
           // make tracking
           logTracking(trackingId, "pickup_pending")
 
-          res.send({
+          return res.send({
             success: true,
             trackingId: trackingId,
             transactionId: session.payment_intent,
@@ -483,7 +486,7 @@ const run = async () => {
         }
       }
 
-      res.send({ success: false });
+      return res.send({ success: false });
     });
 
     // get payment data
