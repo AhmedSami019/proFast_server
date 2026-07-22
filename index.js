@@ -252,6 +252,42 @@ const run = async () => {
       res.send(result);
     });
 
+    // using pipeline
+    app.get("/parcels-deliveryStatus-stats", async(req, res)=>{
+      const pipeline = [
+        {
+          $group : {
+            _id : '$deliveryStatus',
+            count : {$sum : 1}
+          },
+        },
+        {
+          $project: {
+            status : "$_id",
+            count : 1
+          }
+        }
+      ]
+
+      const result = await parcelsCollection.aggregate(pipeline).toArray()
+      res.send(result)
+    })
+
+    // delivery per data
+    app.get("/riders/delivery-per-day", async(req, res)=>{
+      const email = req.query.email
+      const pipeline = [
+        {
+          $match: {
+            riderEmail : email
+          }
+        }
+      ]
+
+      const result = await parcelsCollection.aggregate(pipeline).toArray()
+      res.send(result)
+    })
+
     app.get("/parcels/rider", async(req, res)=>{
       const {riderEmail, deliveryStatus} = req.query
       const query = {}
