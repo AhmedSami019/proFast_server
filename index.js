@@ -8,7 +8,16 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET);
 const crypto = require("crypto");
 
 const admin = require("firebase-admin");
-const serviceAccount = require("./profast-delivery-web-app-firebase-adminsdk.json");
+
+// this is for local machine production
+// const serviceAccount = require("./profast-delivery-web-app-firebase-adminsdk.json");
+
+// this is for deploy section
+// const serviceAccount = require("./firebase-admin-key.json");
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -232,6 +241,13 @@ const run = async () => {
         userResult,
       });
     });
+
+    app.delete("/riders/:id", async(req, res)=>{
+      const id = req.params.id
+      const query = {_id : new ObjectId(id)}
+      const result = await ridersCollection.deleteOne(query)
+      res.send(result)
+    })
 
     // products related apis
     app.get("/parcels", async (req, res) => {
@@ -545,12 +561,12 @@ const run = async () => {
       res.send(result);
     });
 
-    const ping = await client.db("proFast_DB").command({ ping: 1 });
-    if (ping.ok === 1) {
-      console.log(
-        "pinged you deployment. you successfully connect to the mongodb",
-      );
-    }
+    // const ping = await client.db("proFast_DB").command({ ping: 1 });
+    // if (ping.ok === 1) {
+    //   console.log(
+    //     "pinged you deployment. you successfully connect to the mongodb",
+    //   );
+    // }
   } catch (error) {
     console.dir;
     console.log(error.code);
